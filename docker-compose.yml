@@ -1,0 +1,50 @@
+# Dev-окружение: Postgres + Django с автоперезагрузкой.
+# Запуск: make up  (или docker compose up --build)
+
+services:
+  # ---- База данных ----
+  db:
+    image: postgres:17-alpine
+    # Postgres при ПЕРВОМ запуске создаёт пользователя и базу из этих переменных.
+    # Берём их из .env, чтобы не дублировать пароль в двух местах.
+    env_file: .env
+    volumes:
+      # Именованный том: данные базы живут вне контейнера и переживают
+      # docker compose down. Удалить — docker compose down -v.
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      # хост:контейнер. Нужно только чтобы подключаться к базе с хоста
+      # (DBeaver, psql). Между контейнерами порты открывать не нужно.
+      - "5432:5432"
+    healthcheck:
+      # Docker периодически спрашивает "ты жива?". Пока ответ "нет",
+      # web не стартует (см. depends_on ниже).
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ---- Django ----
+  web:
+    build:
+      # context = что видит Dockerfile при COPY. Корень репо, т.к. нужен requirements.txt.
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    # Переопределяем CMD из Dockerfile: в dev нужен runserver с автоперезагрузкой,
+    # а перед ним — миграции, чтобы база всегда была актуальна.
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+    env_file: .env
+    volumes:
+      # Папка backend/ с хоста подменяет /app в контейнере.
+      # Правишь файл — runserver видит изменение и перезапускается.
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
