@@ -1,0 +1,17 @@
+# Что НЕ копировать внутрь образа при сборке (аналог .gitignore для Docker)
+.git
+.idea
+.vscode
+.env
+.env.*
+**/__pycache__
+**/*.pyc
+.venv
+venv
+node_modules
+frontend
+docs
+content
+backend/staticfiles
+backend/media
+backend/db.sqlite3
